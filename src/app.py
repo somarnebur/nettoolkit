@@ -1,4 +1,4 @@
-"""Concurrent URL File Downloader – tkinter GUI application."""
+"""Concurrent URL File Downloader - tkinter GUI application."""
 
 from __future__ import annotations
 
@@ -8,6 +8,28 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+
+# Fail fast with a clear message when a required package is missing
+# (e.g. when launched via the system Python instead of the project venv).
+try:
+    import httpx  # noqa: F401 – imported here only for the early check
+except ImportError:
+    _msg = (
+        "Required package 'httpx' is not installed.\n\n"
+        "Please run the app with the project virtual-environment Python:\n"
+        "    .venv\\Scripts\\python.exe src\\app.py\n\n"
+        "Or install the dependencies first:\n"
+        "    pip install -r requirements.txt"
+    )
+    try:
+        # If tkinter is available, show a dialog so the user sees it.
+        import tkinter as _tk
+        _root = _tk.Tk()
+        _root.withdraw()
+        _tk.messagebox.showerror("Missing dependency", _msg)
+    except Exception:
+        pass
+    sys.exit(_msg)
 
 # Ensure ``src/`` is on the path so sibling modules are importable.
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
