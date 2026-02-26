@@ -1,0 +1,12 @@
+# Sample URL list – one URL per line
+# Lines starting with # are comments and will be ignored.
+# Blank lines are also ignored.
+
+https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+https://speed.hetzner.de/100MB.bin
+https://filesamples.com/samples/document/txt/sample1.txt
+https://filesamples.com/samples/image/jpg/sample_640%C3%97426.jpg
+
+# Invalid URL for testing error handling
+not-a-valid-url
+ftp://example.com/should-fail.txt
