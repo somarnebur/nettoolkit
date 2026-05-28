@@ -6,6 +6,7 @@ import asyncio
 import os
 import tempfile
 import time
+import threading
 from typing import Callable
 
 import httpx
@@ -15,7 +16,6 @@ from utils import (
     filename_from_content_disposition,
     filename_from_url,
     is_valid_url,
-    sanitize_filename,
     unique_filepath,
 )
 
@@ -60,10 +60,12 @@ class DownloadEngine:
         self.on_log = on_log or (lambda _: None)
 
         self._semaphore: asyncio.Semaphore | None = None
-        self._cancel_event = asyncio.Event()
-        self._pause_event = asyncio.Event()
-        self._pause_event.set()  # not paused initially
+        self._cancel_event: asyncio.Event | None = None
+        self._pause_event: asyncio.Event | None = None
         self._client: httpx.AsyncClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._state_lock = threading.Lock()
+        self._paused = False
 
     # ------------------------------------------------------------------
     # Public API (called from any thread)
@@ -71,9 +73,13 @@ class DownloadEngine:
 
     async def run(self) -> DownloadStats:
         """Download all items concurrently and return aggregate stats."""
+        self._loop = asyncio.get_running_loop()
         self._semaphore = asyncio.Semaphore(self.concurrency)
-        self._cancel_event.clear()
+        self._cancel_event = asyncio.Event()
+        self._pause_event = asyncio.Event()
         self._pause_event.set()
+        with self._state_lock:
+            self._paused = False
 
         timeout = httpx.Timeout(
             connect=CONNECT_TIMEOUT, read=READ_TIMEOUT, write=30, pool=30
@@ -85,27 +91,43 @@ class DownloadEngine:
             tasks = [
                 asyncio.create_task(self._download_one(item)) for item in self.items
             ]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for item, result in zip(self.items, results):
+                if isinstance(result, Exception):
+                    item.status = DownloadStatus.FAILED
+                    item.error = str(result) or result.__class__.__name__
+                    self.on_progress(item)
             self._client = None
 
         return self._compute_stats()
 
     def request_cancel(self) -> None:
         """Signal all in-progress and queued downloads to cancel."""
-        self._cancel_event.set()
-        # Also unpause so paused tasks can see the cancel signal.
-        self._pause_event.set()
+        if self._loop and self._cancel_event and self._pause_event:
+            self._loop.call_soon_threadsafe(self._cancel_event.set)
+            self._loop.call_soon_threadsafe(self._pause_event.set)
+
+    def current_stats(self) -> DownloadStats:
+        """Return aggregate stats for the current item states."""
+        return self._compute_stats()
 
     def toggle_pause(self) -> bool:
         """Toggle pause/resume. Returns True if now paused."""
-        if self._pause_event.is_set():
-            self._pause_event.clear()
+        with self._state_lock:
+            self._paused = not self._paused
+            paused = self._paused
+
+        if not self._loop or not self._pause_event:
+            return paused
+
+        if paused:
+            self._loop.call_soon_threadsafe(self._pause_event.clear)
             self._log("Downloads paused.")
             return True
-        else:
-            self._pause_event.set()
-            self._log("Downloads resumed.")
-            return False
+
+        self._loop.call_soon_threadsafe(self._pause_event.set)
+        self._log("Downloads resumed.")
+        return False
 
     # ------------------------------------------------------------------
     # Internal
@@ -122,7 +144,7 @@ class DownloadEngine:
             return
 
         # Wait for semaphore slot.
-        assert self._semaphore is not None
+        assert self._semaphore is not None and self._cancel_event is not None
         async with self._semaphore:
             if self._cancel_event.is_set():
                 item.status = DownloadStatus.CANCELED
@@ -160,6 +182,7 @@ class DownloadEngine:
     async def _do_download(self, item: DownloadItem) -> None:
         """Perform the actual HTTP download with streaming."""
         assert self._client is not None
+        assert self._cancel_event is not None
 
         async with self._client.stream("GET", item.url) as resp:
             resp.raise_for_status()
@@ -214,6 +237,7 @@ class DownloadEngine:
 
     async def _wait_if_paused(self) -> None:
         """Block until the pause event is set (i.e. not paused)."""
+        assert self._pause_event is not None
         await self._pause_event.wait()
 
     def _compute_stats(self) -> DownloadStats:

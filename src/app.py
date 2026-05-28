@@ -267,6 +267,9 @@ class App(tk.Tk):
         asyncio.set_event_loop(self._loop)
         try:
             stats = self._loop.run_until_complete(self._engine.run())
+        except Exception as exc:
+            self.after(0, self._append_log, f"Download worker failed: {exc}")
+            stats = self._engine.current_stats()
         finally:
             self._loop.close()
         # Notify UI that we're done.

@@ -5,8 +5,18 @@ from __future__ import annotations
 import os
 import re
 from email.message import Message
-from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+
+WINDOWS_RESERVED_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+MAX_FILENAME_LENGTH = 240
 
 
 def parse_url_file(path: str) -> list[str]:
@@ -65,9 +75,22 @@ def filename_from_url(url: str) -> str:
 
 def sanitize_filename(name: str) -> str:
     """Remove or replace characters that are invalid in file names."""
-    # Replace path-separator and other problematic chars.
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
     name = name.strip(". ")
+    if not name:
+        return "download"
+
+    stem, ext = os.path.splitext(name)
+    if stem.upper() in WINDOWS_RESERVED_NAMES:
+        stem = f"_{stem}"
+
+    max_stem_length = MAX_FILENAME_LENGTH - len(ext)
+    if max_stem_length < 1:
+        ext = ext[: MAX_FILENAME_LENGTH - 1]
+        max_stem_length = 1
+    stem = stem[:max_stem_length]
+
+    name = f"{stem}{ext}".strip(". ")
     return name or "download"
 
 

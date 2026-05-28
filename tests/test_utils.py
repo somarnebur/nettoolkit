@@ -89,6 +89,14 @@ class TestSanitizeFilename:
     def test_empty_becomes_download(self):
         assert sanitize_filename("") == "download"
 
+    def test_windows_reserved_name_is_prefixed(self):
+        assert sanitize_filename("CON.txt") == "_CON.txt"
+
+    def test_long_filename_is_limited(self):
+        result = sanitize_filename(("a" * 300) + ".txt")
+        assert len(result) <= 240
+        assert result.endswith(".txt")
+
 
 # ── parse_url_file ───────────────────────────────────────────────────
 
