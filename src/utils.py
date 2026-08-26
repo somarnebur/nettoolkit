@@ -19,20 +19,28 @@ WINDOWS_RESERVED_NAMES = {
 MAX_FILENAME_LENGTH = 240
 
 
+def parse_url_lines(text: str) -> list[str]:
+    """Return URL strings from raw text, one per line.
+
+    Blank lines and lines starting with ``#`` are ignored.
+    """
+    urls: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        urls.append(line)
+    return urls
+
+
 def parse_url_file(path: str) -> list[str]:
     """Read a text file and return a list of valid URL strings.
 
     Blank lines and lines starting with ``#`` are ignored.
     Only ``http`` and ``https`` schemes are accepted.
     """
-    urls: list[str] = []
     with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            urls.append(line)
-    return urls
+        return parse_url_lines(fh.read())
 
 
 def is_valid_url(url: str) -> bool:

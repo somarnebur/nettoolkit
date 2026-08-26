@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from downloader import DownloadEngine
 from models import DownloadItem, DownloadStatus
 from theme import PALETTE, style_tree_tags
-from utils import parse_url_file
+from utils import parse_url_file, parse_url_lines
 
 
 def _status_tag(status: str) -> str:
@@ -65,28 +65,45 @@ class DownloadTab(ttk.Frame):
             row=1, column=2, sticky=tk.E
         )
 
+        # Paste URLs directly (alternative to a file)
+        ttk.Label(card, text="Or paste URLs", style="Muted.TLabel").grid(
+            row=2, column=0, sticky=tk.NW, padx=(0, 12), pady=(10, 0)
+        )
+        self._paste_text = tk.Text(
+            card, height=4, wrap=tk.NONE, relief="flat",
+            background=PALETTE["surface_alt"], foreground=PALETTE["text"],
+            borderwidth=1, padx=8, pady=6, font=("Cascadia Mono", 9),
+            highlightthickness=1, highlightbackground=PALETTE["border"],
+            highlightcolor=PALETTE["accent"], insertbackground=PALETTE["text"],
+        )
+        self._paste_text.grid(row=2, column=1, columnspan=2, sticky=tk.EW, pady=(10, 0))
+        ttk.Label(
+            card, text="One URL per line. Takes priority over the file above.",
+            style="Muted.TLabel",
+        ).grid(row=3, column=1, columnspan=2, sticky=tk.W, pady=(4, 0))
+
         # Output folder selection
         ttk.Label(card, text="Output folder", style="Muted.TLabel").grid(
-            row=2, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
+            row=4, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
         )
         self._out_label = ttk.Label(card, text="No folder selected", style="Muted.TLabel")
-        self._out_label.grid(row=2, column=1, sticky=tk.W, pady=(10, 0))
+        self._out_label.grid(row=4, column=1, sticky=tk.W, pady=(10, 0))
         ttk.Button(card, text="Browse…", command=self._pick_output).grid(
-            row=2, column=2, sticky=tk.E, pady=(10, 0)
+            row=4, column=2, sticky=tk.E, pady=(10, 0)
         )
 
         # Concurrency spinner
         ttk.Label(card, text="Simultaneous downloads", style="Muted.TLabel").grid(
-            row=3, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
+            row=5, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
         )
         self._concurrency_var = tk.IntVar(value=5)
         ttk.Spinbox(
             card, from_=1, to=50, textvariable=self._concurrency_var, width=6
-        ).grid(row=3, column=1, sticky=tk.W, pady=(10, 0))
+        ).grid(row=5, column=1, sticky=tk.W, pady=(10, 0))
 
         # Action buttons
         btn_frame = ttk.Frame(card, style="Card.TFrame")
-        btn_frame.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(16, 0))
+        btn_frame.grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=(16, 0))
         self._start_btn = ttk.Button(
             btn_frame, text="Start download", style="Accent.TButton", command=self._on_start
         )
@@ -185,8 +202,12 @@ class DownloadTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _on_start(self) -> None:
-        if not self._url_file:
-            messagebox.showwarning("Missing input", "Please select a URL file first.")
+        pasted = self._paste_text.get("1.0", tk.END).strip()
+        if not pasted and not self._url_file:
+            messagebox.showwarning(
+                "Missing input",
+                "Paste one or more URLs, or select a URL file first.",
+            )
             return
         if not self._output_dir:
             messagebox.showwarning(
@@ -194,14 +215,20 @@ class DownloadTab(ttk.Frame):
             )
             return
 
-        try:
-            urls = parse_url_file(self._url_file)
-        except Exception as exc:
-            messagebox.showerror("Error", f"Cannot read URL file:\n{exc}")
-            return
+        # Pasted URLs take priority over a selected file.
+        if pasted:
+            urls = parse_url_lines(pasted)
+            source = "pasted list"
+        else:
+            try:
+                urls = parse_url_file(self._url_file)
+            except Exception as exc:
+                messagebox.showerror("Error", f"Cannot read URL file:\n{exc}")
+                return
+            source = self._url_file
 
         if not urls:
-            messagebox.showinfo("Empty", "The URL file contains no URLs.")
+            messagebox.showinfo("Empty", "No URLs found in the input.")
             return
 
         # Build DownloadItem list and populate table.
@@ -217,7 +244,7 @@ class DownloadTab(ttk.Frame):
             )
         self._overall_var.set(0.0)
         self._stats_label.config(text=f"Total: {len(self._items)}")
-        self._append_log(f"Loaded {len(self._items)} URLs from {self._url_file}")
+        self._append_log(f"Loaded {len(self._items)} URLs from {source}")
 
         # Disable start, enable pause/cancel.
         self._start_btn.config(state=tk.DISABLED)
