@@ -52,14 +52,14 @@ class App(tk.Tk):
         notebook.pack(fill=tk.BOTH, expand=True)
 
         if DownloadTab is not None:
-            notebook.add(DownloadTab(notebook), text="  Downloader  ")
+            notebook.add(DownloadTab(notebook), text="Downloader")
         else:
             notebook.add(
                 self._missing_dep_tab(notebook, _DOWNLOAD_IMPORT_ERROR),
-                text="  Downloader  ",
+                text="Downloader",
             )
 
-        notebook.add(PcapTab(notebook), text="  PCAP Filter / Merge  ")
+        notebook.add(PcapTab(notebook), text="PCAP Filter / Merge")
 
     def _build_header(self) -> None:
         header = ttk.Frame(self, style="Header.TFrame", padding=(20, 14))

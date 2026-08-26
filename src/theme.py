@@ -203,19 +203,21 @@ def apply_theme(root: tk.Tk) -> dict:
     )
 
     # Notebook (tabs)
-    style.configure("TNotebook", background=p["bg"], borderwidth=0, tabmargins=(10, 8, 10, 0))
+    style.configure("TNotebook", background=p["bg"], borderwidth=0, tabmargins=(6, 8, 6, 0))
     style.configure(
         "TNotebook.Tab",
-        background=p["bg"],
+        background=p["track"],
         foreground=p["muted"],
-        padding=(18, 9),
+        padding=(10, 9),
+        width=20,
+        anchor="center",
         font=FONTS["body_bold"],
         borderwidth=0,
     )
     style.map(
         "TNotebook.Tab",
-        background=[("selected", p["surface"])],
-        foreground=[("selected", p["accent"]), ("active", p["text"])],
+        background=[("selected", p["accent"]), ("active", "#d6dde6")],
+        foreground=[("selected", "#ffffff"), ("active", p["text"])],
     )
 
     # Progressbar
