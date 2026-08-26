@@ -34,7 +34,7 @@ except ImportError as exc:
 
 
 class App(tk.Tk):
-    """Main application window hosting both tools in a Notebook."""
+    """Main application window hosting both tools with a segmented tab bar."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -45,21 +45,60 @@ class App(tk.Tk):
         apply_theme(self)
         self._build_header()
 
-        body = ttk.Frame(self, padding=(14, 10, 14, 14))
+        body = ttk.Frame(self, padding=(14, 12, 14, 14))
         body.pack(fill=tk.BOTH, expand=True)
 
-        notebook = ttk.Notebook(body)
-        notebook.pack(fill=tk.BOTH, expand=True)
-
+        # Build the two tool panels.
+        container = ttk.Frame(body)
         if DownloadTab is not None:
-            notebook.add(DownloadTab(notebook), text="Downloader")
+            download_panel: tk.Widget = DownloadTab(container)
         else:
-            notebook.add(
-                self._missing_dep_tab(notebook, _DOWNLOAD_IMPORT_ERROR),
-                text="Downloader",
-            )
+            download_panel = self._missing_dep_tab(container, _DOWNLOAD_IMPORT_ERROR)
+        pcap_panel = PcapTab(container)
 
-        notebook.add(PcapTab(notebook), text="PCAP Filter / Merge")
+        self._panels = {"download": download_panel, "pcap": pcap_panel}
+
+        # Segmented tab bar — two buttons forced to exactly 50% width each.
+        self._tab_buttons: dict[str, tk.Button] = {}
+        tabbar = ttk.Frame(body)
+        tabbar.pack(fill=tk.X)
+        for col, (key, label) in enumerate(
+            (("download", "Downloader"), ("pcap", "PCAP Filter / Merge"))
+        ):
+            btn = tk.Button(
+                tabbar,
+                text=label,
+                relief="flat",
+                borderwidth=0,
+                cursor="hand2",
+                pady=11,
+                font=("Segoe UI", 10, "bold"),
+                command=lambda k=key: self._select_tab(k),
+            )
+            btn.grid(row=0, column=col, sticky="nsew", padx=(0, 1) if col == 0 else (1, 0))
+            tabbar.columnconfigure(col, weight=1, uniform="tabs")
+            self._tab_buttons[key] = btn
+
+        # Panels share one cell; the selected one is raised.
+        container.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
+        for panel in self._panels.values():
+            panel.grid(row=0, column=0, sticky="nsew")
+        container.rowconfigure(0, weight=1)
+        container.columnconfigure(0, weight=1)
+
+        self._select_tab("download")
+
+    def _select_tab(self, key: str) -> None:
+        p = PALETTE
+        for k, btn in self._tab_buttons.items():
+            selected = k == key
+            btn.configure(
+                background=p["accent"] if selected else p["track"],
+                foreground="#ffffff" if selected else p["muted"],
+                activebackground=p["accent_hover"] if selected else "#d6dde6",
+                activeforeground="#ffffff" if selected else p["text"],
+            )
+        self._panels[key].tkraise()
 
     def _build_header(self) -> None:
         header = ttk.Frame(self, style="Header.TFrame", padding=(20, 14))
