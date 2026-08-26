@@ -16,7 +16,7 @@ echo Installing/updating dependencies...
 "%VENV_PY%" -m pip install -r requirements.txt
 if errorlevel 1 goto :error
 
-echo Starting EverflowDownload...
+echo Starting NetToolkit...
 start "" "%VENV_PYW%" "%CD%\run_gui.pyw" %*
 
 popd >nul
@@ -24,7 +24,7 @@ exit /b 0
 
 :error
 echo.
-echo EverflowDownload could not start. Please check the error above.
+echo NetToolkit could not start. Please check the error above.
 echo.
 pause
 popd >nul

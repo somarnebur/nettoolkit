@@ -1,4 +1,4 @@
-"""Launcher for the Concurrent URL File Downloader GUI.
+"""Launcher for the NetToolkit GUI (URL Downloader + PCAP Filter/Merge).
 
 Double-click this .pyw file to start the app without a console window.
 """
