@@ -9,14 +9,26 @@ from tkinter import filedialog, messagebox, ttk
 
 from downloader import DownloadEngine
 from models import DownloadItem, DownloadStatus
+from theme import PALETTE, style_tree_tags
 from utils import parse_url_file
+
+
+def _status_tag(status: str) -> str:
+    """Map a status label to a Treeview color tag."""
+    return {
+        "Done": "done",
+        "Failed": "failed",
+        "Downloading": "active",
+        "Canceled": "canceled",
+        "Paused": "canceled",
+    }.get(status, "")
 
 
 class DownloadTab(ttk.Frame):
     """Concurrent URL file downloader, embeddable in a Notebook."""
 
     def __init__(self, master: tk.Misc) -> None:
-        super().__init__(master)
+        super().__init__(master, padding=(0, 12, 0, 0))
 
         # State
         self._url_file: str = ""
@@ -34,68 +46,75 @@ class DownloadTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        # ── Top controls ──────────────────────────────────────────────
-        ctrl = ttk.Frame(self, padding=8)
-        ctrl.pack(fill=tk.X)
+        # ── Configuration card ────────────────────────────────────────
+        card = ttk.Frame(self, style="Card.TFrame", padding=16)
+        card.pack(fill=tk.X)
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="Configuration", style="Heading.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 12)
+        )
 
         # URL file selection
-        ttk.Button(ctrl, text="Select URL file", command=self._pick_url_file).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 4)
+        ttk.Label(card, text="URL list file", style="Muted.TLabel").grid(
+            row=1, column=0, sticky=tk.W, padx=(0, 12)
         )
-        self._url_label = ttk.Label(ctrl, text="(no file selected)", foreground="gray")
-        self._url_label.grid(row=0, column=1, sticky=tk.W)
+        self._url_label = ttk.Label(card, text="No file selected", style="Muted.TLabel")
+        self._url_label.grid(row=1, column=1, sticky=tk.W)
+        ttk.Button(card, text="Browse…", command=self._pick_url_file).grid(
+            row=1, column=2, sticky=tk.E
+        )
 
         # Output folder selection
-        ttk.Button(ctrl, text="Select output folder", command=self._pick_output).grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 4), pady=(4, 0)
+        ttk.Label(card, text="Output folder", style="Muted.TLabel").grid(
+            row=2, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
         )
-        self._out_label = ttk.Label(
-            ctrl, text="(no folder selected)", foreground="gray"
+        self._out_label = ttk.Label(card, text="No folder selected", style="Muted.TLabel")
+        self._out_label.grid(row=2, column=1, sticky=tk.W, pady=(10, 0))
+        ttk.Button(card, text="Browse…", command=self._pick_output).grid(
+            row=2, column=2, sticky=tk.E, pady=(10, 0)
         )
-        self._out_label.grid(row=1, column=1, sticky=tk.W, pady=(4, 0))
 
         # Concurrency spinner
-        ttk.Label(ctrl, text="Simultaneous downloads:").grid(
-            row=2, column=0, sticky=tk.W, pady=(8, 0)
+        ttk.Label(card, text="Simultaneous downloads", style="Muted.TLabel").grid(
+            row=3, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
         )
         self._concurrency_var = tk.IntVar(value=5)
-        spin = ttk.Spinbox(
-            ctrl,
-            from_=1,
-            to=50,
-            textvariable=self._concurrency_var,
-            width=5,
-        )
-        spin.grid(row=2, column=1, sticky=tk.W, pady=(8, 0))
+        ttk.Spinbox(
+            card, from_=1, to=50, textvariable=self._concurrency_var, width=6
+        ).grid(row=3, column=1, sticky=tk.W, pady=(10, 0))
 
         # Action buttons
-        btn_frame = ttk.Frame(ctrl)
-        btn_frame.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
-        self._start_btn = ttk.Button(btn_frame, text="Start", command=self._on_start)
-        self._start_btn.pack(side=tk.LEFT, padx=(0, 4))
+        btn_frame = ttk.Frame(card, style="Card.TFrame")
+        btn_frame.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(16, 0))
+        self._start_btn = ttk.Button(
+            btn_frame, text="Start download", style="Accent.TButton", command=self._on_start
+        )
+        self._start_btn.pack(side=tk.LEFT, padx=(0, 8))
         self._pause_btn = ttk.Button(
             btn_frame, text="Pause", command=self._on_pause, state=tk.DISABLED
         )
-        self._pause_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._pause_btn.pack(side=tk.LEFT, padx=(0, 8))
         self._cancel_btn = ttk.Button(
-            btn_frame, text="Cancel", command=self._on_cancel, state=tk.DISABLED
+            btn_frame, text="Cancel", style="Danger.TButton",
+            command=self._on_cancel, state=tk.DISABLED,
         )
         self._cancel_btn.pack(side=tk.LEFT)
 
-        # ── Overall progress bar ──────────────────────────────────────
-        prog_frame = ttk.Frame(self, padding=(8, 4))
-        prog_frame.pack(fill=tk.X)
+        # ── Progress card ─────────────────────────────────────────────
+        prog = ttk.Frame(self, style="Card.TFrame", padding=(16, 12))
+        prog.pack(fill=tk.X, pady=(12, 0))
         self._overall_var = tk.DoubleVar(value=0.0)
-        self._overall_bar = ttk.Progressbar(
-            prog_frame, variable=self._overall_var, maximum=100
-        )
-        self._overall_bar.pack(fill=tk.X)
-        self._stats_label = ttk.Label(prog_frame, text="")
-        self._stats_label.pack(anchor=tk.W, pady=(2, 0))
+        ttk.Progressbar(
+            prog, variable=self._overall_var, maximum=100,
+            style="Horizontal.TProgressbar",
+        ).pack(fill=tk.X)
+        self._stats_label = ttk.Label(prog, text="Idle", style="Muted.TLabel")
+        self._stats_label.pack(anchor=tk.W, pady=(8, 0))
 
         # ── Download table ────────────────────────────────────────────
-        table_frame = ttk.Frame(self, padding=(8, 0))
-        table_frame.pack(fill=tk.BOTH, expand=True)
+        table_frame = ttk.Frame(self, style="Card.TFrame", padding=(12, 12))
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
 
         columns = ("filename", "url", "status", "progress", "bytes", "error")
         self._tree = ttk.Treeview(
@@ -114,6 +133,7 @@ class DownloadTab(ttk.Frame):
         self._tree.column("progress", width=80, anchor=tk.CENTER)
         self._tree.column("bytes", width=100, anchor=tk.E)
         self._tree.column("error", width=160)
+        style_tree_tags(self._tree)
 
         vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self._tree.yview)
         self._tree.configure(yscrollcommand=vsb.set)
@@ -121,11 +141,21 @@ class DownloadTab(ttk.Frame):
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         # ── Log area ─────────────────────────────────────────────────
-        log_frame = ttk.LabelFrame(self, text="Log", padding=4)
-        log_frame.pack(fill=tk.BOTH, expand=False, padx=8, pady=(4, 8))
-        self._log_text = tk.Text(log_frame, height=8, state=tk.DISABLED, wrap=tk.WORD)
+        log_frame = ttk.Frame(self, style="Card.TFrame", padding=(12, 10))
+        log_frame.pack(fill=tk.BOTH, expand=False, pady=(12, 0))
+        ttk.Label(log_frame, text="Activity log", style="Heading.TLabel").pack(
+            anchor=tk.W, pady=(0, 8)
+        )
+        log_body = ttk.Frame(log_frame, style="Card.TFrame")
+        log_body.pack(fill=tk.BOTH, expand=True)
+        self._log_text = tk.Text(
+            log_body, height=7, state=tk.DISABLED, wrap=tk.WORD,
+            relief="flat", background=PALETTE["surface_alt"],
+            foreground=PALETTE["text"], borderwidth=0,
+            padx=10, pady=8, font=("Cascadia Mono", 9),
+        )
         log_sb = ttk.Scrollbar(
-            log_frame, orient=tk.VERTICAL, command=self._log_text.yview
+            log_body, orient=tk.VERTICAL, command=self._log_text.yview
         )
         self._log_text.configure(yscrollcommand=log_sb.set)
         self._log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -142,13 +172,13 @@ class DownloadTab(ttk.Frame):
         )
         if path:
             self._url_file = path
-            self._url_label.config(text=path, foreground="black")
+            self._url_label.config(text=path, style="Card.TLabel")
 
     def _pick_output(self) -> None:
         path = filedialog.askdirectory(title="Select output folder")
         if path:
             self._output_dir = path
-            self._out_label.config(text=path, foreground="black")
+            self._out_label.config(text=path, style="Card.TLabel")
 
     # ------------------------------------------------------------------
     # Button handlers
@@ -183,6 +213,7 @@ class DownloadTab(ttk.Frame):
                 tk.END,
                 iid=str(item.index),
                 values=("", item.url, item.status.value, "0", "", ""),
+                tags=("even" if item.index % 2 else "odd",),
             )
         self._overall_var.set(0.0)
         self._stats_label.config(text=f"Total: {len(self._items)}")
@@ -285,7 +316,12 @@ class DownloadTab(ttk.Frame):
         error: str,
     ) -> None:
         try:
-            self._tree.item(iid, values=(filename, url, status, pct, dl_bytes, error))
+            stripe = "even" if int(iid) % 2 else "odd"
+            self._tree.item(
+                iid,
+                values=(filename, url, status, pct, dl_bytes, error),
+                tags=(stripe, _status_tag(status)),
+            )
         except tk.TclError:
             pass  # row may have been removed
 

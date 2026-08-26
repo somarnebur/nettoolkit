@@ -19,6 +19,7 @@ if _SRC_DIR not in sys.path:
 
 # The PCAP tab only needs stdlib + an external tshark/mergecap install.
 from pcap.tab import PcapTab
+from theme import PALETTE, apply_theme
 
 # The download tab needs httpx; import it defensively so a missing dependency
 # does not take down the whole application (the PCAP tab still works).
@@ -38,31 +39,50 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("NetToolkit - Downloader & PCAP Filter")
-        self.geometry("980x700")
-        self.minsize(820, 560)
+        self.geometry("1040x740")
+        self.minsize(860, 600)
 
-        notebook = ttk.Notebook(self)
+        apply_theme(self)
+        self._build_header()
+
+        body = ttk.Frame(self, padding=(14, 10, 14, 14))
+        body.pack(fill=tk.BOTH, expand=True)
+
+        notebook = ttk.Notebook(body)
         notebook.pack(fill=tk.BOTH, expand=True)
 
         if DownloadTab is not None:
-            notebook.add(DownloadTab(notebook), text="URL Downloader")
+            notebook.add(DownloadTab(notebook), text="  Downloader  ")
         else:
             notebook.add(
                 self._missing_dep_tab(notebook, _DOWNLOAD_IMPORT_ERROR),
-                text="URL Downloader",
+                text="  Downloader  ",
             )
 
-        notebook.add(PcapTab(notebook), text="PCAP Filter / Merge")
+        notebook.add(PcapTab(notebook), text="  PCAP Filter / Merge  ")
+
+    def _build_header(self) -> None:
+        header = ttk.Frame(self, style="Header.TFrame", padding=(20, 14))
+        header.pack(fill=tk.X)
+        ttk.Label(header, text="NetToolkit", style="AppTitle.TLabel").pack(anchor=tk.W)
+        ttk.Label(
+            header,
+            text="Concurrent URL downloads  ·  Wireshark PCAP filter & merge",
+            style="AppSubtitle.TLabel",
+        ).pack(anchor=tk.W, pady=(2, 0))
+        tk.Frame(self, height=3, bg=PALETTE["accent"]).pack(fill=tk.X)
 
     @staticmethod
     def _missing_dep_tab(master: tk.Misc, error: str) -> ttk.Frame:
-        frame = ttk.Frame(master, padding=20)
+        frame = ttk.Frame(master, style="Card.TFrame", padding=24)
         msg = (
             "The URL Downloader requires the 'httpx' package, which is not "
             f"installed.\n\nImport error: {error}\n\n"
             "Install dependencies with:\n    pip install -r requirements.txt"
         )
-        ttk.Label(frame, text=msg, justify=tk.LEFT, foreground="red").pack(anchor=tk.W)
+        ttk.Label(
+            frame, text=msg, justify=tk.LEFT, style="Danger.TLabel"
+        ).pack(anchor=tk.W)
         return frame
 
 

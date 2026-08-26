@@ -12,12 +12,25 @@ from .processor import BatchProcessor, MergeProcessor
 from .tshark import MergecapInfo, TsharkInfo, detect_mergecap, detect_tshark
 from .utils import scan_capture_files
 
+# Theme lives at src/theme.py (added to sys.path by the app entry point).
+from theme import PALETTE, style_tree_tags
+
+
+def _status_tag(status: str) -> str:
+    """Map a status label to a Treeview color tag."""
+    return {
+        "Done": "done",
+        "Failed": "failed",
+        "Processing": "active",
+        "Canceled": "canceled",
+    }.get(status, "")
+
 
 class PcapTab(ttk.Frame):
     """Batch PCAP filter (tshark) / merge (mergecap), embeddable in a Notebook."""
 
     def __init__(self, master: tk.Misc) -> None:
-        super().__init__(master)
+        super().__init__(master, padding=(0, 12, 0, 0))
 
         # State
         self._input_dir: str = ""
@@ -39,105 +52,124 @@ class PcapTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
-        ctrl = ttk.Frame(self, padding=8)
-        ctrl.pack(fill=tk.X)
-        ctrl.columnconfigure(1, weight=1)
+        card = ttk.Frame(self, style="Card.TFrame", padding=16)
+        card.pack(fill=tk.X)
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="Configuration", style="Heading.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 12)
+        )
 
         # Input folder
-        ttk.Button(ctrl, text="Input folder", command=self._pick_input).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 4)
+        ttk.Label(card, text="Input folder", style="Muted.TLabel").grid(
+            row=1, column=0, sticky=tk.W, padx=(0, 12)
         )
-        self._in_label = ttk.Label(ctrl, text="(no folder selected)", foreground="gray")
-        self._in_label.grid(row=0, column=1, columnspan=3, sticky=tk.W)
+        self._in_label = ttk.Label(card, text="No folder selected", style="Muted.TLabel")
+        self._in_label.grid(row=1, column=1, sticky=tk.W)
+        ttk.Button(card, text="Browse…", command=self._pick_input).grid(
+            row=1, column=2, sticky=tk.E
+        )
 
         # Output folder
-        ttk.Button(ctrl, text="Output folder", command=self._pick_output).grid(
-            row=1, column=0, sticky=tk.W, padx=(0, 4), pady=(4, 0)
+        ttk.Label(card, text="Output folder", style="Muted.TLabel").grid(
+            row=2, column=0, sticky=tk.W, padx=(0, 12), pady=(10, 0)
         )
-        self._out_label = ttk.Label(
-            ctrl, text="(no folder selected)", foreground="gray"
+        self._out_label = ttk.Label(card, text="No folder selected", style="Muted.TLabel")
+        self._out_label.grid(row=2, column=1, sticky=tk.W, pady=(10, 0))
+        ttk.Button(card, text="Browse…", command=self._pick_output).grid(
+            row=2, column=2, sticky=tk.E, pady=(10, 0)
         )
-        self._out_label.grid(row=1, column=1, columnspan=3, sticky=tk.W, pady=(4, 0))
 
         # Mode: Filter vs Merge
-        ttk.Label(ctrl, text="Mode:").grid(row=2, column=0, sticky=tk.W, pady=(8, 0))
+        ttk.Label(card, text="Mode", style="Muted.TLabel").grid(
+            row=3, column=0, sticky=tk.W, padx=(0, 12), pady=(12, 0)
+        )
         self._mode_var = tk.StringVar(value="filter")
-        mode_frame = ttk.Frame(ctrl)
-        mode_frame.grid(row=2, column=1, sticky=tk.W, pady=(8, 0))
+        mode_frame = ttk.Frame(card, style="Card.TFrame")
+        mode_frame.grid(row=3, column=1, columnspan=2, sticky=tk.W, pady=(12, 0))
         ttk.Radiobutton(
             mode_frame,
             text="Filter (tshark)",
+            style="Card.TRadiobutton",
             variable=self._mode_var,
             value="filter",
             command=self._on_mode_change,
-        ).pack(side=tk.LEFT, padx=(0, 8))
+        ).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Radiobutton(
             mode_frame,
             text="Merge (mergecap)",
+            style="Card.TRadiobutton",
             variable=self._mode_var,
             value="merge",
             command=self._on_mode_change,
         ).pack(side=tk.LEFT)
 
         # Display filter
-        ttk.Label(ctrl, text="Display filter:").grid(
-            row=3, column=0, sticky=tk.NW, pady=(8, 0)
+        ttk.Label(card, text="Display filter", style="Muted.TLabel").grid(
+            row=4, column=0, sticky=tk.NW, pady=(12, 0)
         )
-        self._filter_text = tk.Text(ctrl, height=2, width=50, wrap=tk.WORD)
-        self._filter_text.grid(
-            row=3, column=1, columnspan=3, sticky=tk.EW, pady=(8, 0)
+        self._filter_text = tk.Text(
+            card, height=2, width=50, wrap=tk.WORD, relief="flat",
+            background=PALETTE["surface_alt"], foreground=PALETTE["text"],
+            borderwidth=1, padx=8, pady=6, font=("Cascadia Mono", 9),
+            highlightthickness=1, highlightbackground=PALETTE["border"],
+            highlightcolor=PALETTE["accent"], insertbackground=PALETTE["text"],
         )
+        self._filter_text.grid(row=4, column=1, columnspan=2, sticky=tk.EW, pady=(12, 0))
         ttk.Label(
-            ctrl,
+            card,
             text="Wireshark display filter, e.g.  ip.addr == 10.0.0.5",
-            foreground="gray",
-        ).grid(row=4, column=1, columnspan=3, sticky=tk.W)
+            style="Muted.TLabel",
+        ).grid(row=5, column=1, columnspan=2, sticky=tk.W, pady=(4, 0))
 
         # Output format
-        ttk.Label(ctrl, text="Output format:").grid(
-            row=5, column=0, sticky=tk.W, pady=(8, 0)
+        ttk.Label(card, text="Output format", style="Muted.TLabel").grid(
+            row=6, column=0, sticky=tk.W, padx=(0, 12), pady=(12, 0)
         )
         self._format_var = tk.StringVar(value="pcapng")
-        fmt = ttk.Combobox(
-            ctrl,
+        ttk.Combobox(
+            card,
             textvariable=self._format_var,
             values=["pcapng", "pcap"],
             state="readonly",
-            width=8,
-        )
-        fmt.grid(row=5, column=1, sticky=tk.W, pady=(8, 0))
+            width=10,
+        ).grid(row=6, column=1, sticky=tk.W, pady=(12, 0))
 
         # Tool status
-        self._tool_label = ttk.Label(ctrl, text="", foreground="gray")
-        self._tool_label.grid(row=6, column=0, columnspan=4, sticky=tk.W, pady=(6, 0))
+        self._tool_label = ttk.Label(card, text="", style="Muted.TLabel")
+        self._tool_label.grid(row=7, column=0, columnspan=3, sticky=tk.W, pady=(12, 0))
 
         # Action buttons
-        btn_frame = ttk.Frame(ctrl)
-        btn_frame.grid(row=7, column=0, columnspan=4, sticky=tk.W, pady=(8, 0))
-        self._start_btn = ttk.Button(btn_frame, text="Start", command=self._on_start)
-        self._start_btn.pack(side=tk.LEFT, padx=(0, 4))
+        btn_frame = ttk.Frame(card, style="Card.TFrame")
+        btn_frame.grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=(16, 0))
+        self._start_btn = ttk.Button(
+            btn_frame, text="Start", style="Accent.TButton", command=self._on_start
+        )
+        self._start_btn.pack(side=tk.LEFT, padx=(0, 8))
         self._pause_btn = ttk.Button(
             btn_frame, text="Pause", command=self._on_pause, state=tk.DISABLED
         )
-        self._pause_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._pause_btn.pack(side=tk.LEFT, padx=(0, 8))
         self._cancel_btn = ttk.Button(
-            btn_frame, text="Cancel", command=self._on_cancel, state=tk.DISABLED
+            btn_frame, text="Cancel", style="Danger.TButton",
+            command=self._on_cancel, state=tk.DISABLED,
         )
         self._cancel_btn.pack(side=tk.LEFT)
 
-        # Overall progress bar
-        prog_frame = ttk.Frame(self, padding=(8, 4))
-        prog_frame.pack(fill=tk.X)
+        # Overall progress card
+        prog = ttk.Frame(self, style="Card.TFrame", padding=(16, 12))
+        prog.pack(fill=tk.X, pady=(12, 0))
         self._overall_var = tk.DoubleVar(value=0.0)
-        ttk.Progressbar(prog_frame, variable=self._overall_var, maximum=100).pack(
-            fill=tk.X
-        )
-        self._stats_label = ttk.Label(prog_frame, text="")
-        self._stats_label.pack(anchor=tk.W, pady=(2, 0))
+        ttk.Progressbar(
+            prog, variable=self._overall_var, maximum=100,
+            style="Horizontal.TProgressbar",
+        ).pack(fill=tk.X)
+        self._stats_label = ttk.Label(prog, text="Idle", style="Muted.TLabel")
+        self._stats_label.pack(anchor=tk.W, pady=(8, 0))
 
         # File table
-        table_frame = ttk.Frame(self, padding=(8, 0))
-        table_frame.pack(fill=tk.BOTH, expand=True)
+        table_frame = ttk.Frame(self, style="Card.TFrame", padding=(12, 12))
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
 
         columns = ("filename", "status", "output", "error")
         self._tree = ttk.Treeview(
@@ -151,6 +183,7 @@ class PcapTab(ttk.Frame):
         self._tree.column("status", width=90, anchor=tk.CENTER)
         self._tree.column("output", width=220)
         self._tree.column("error", width=220)
+        style_tree_tags(self._tree)
 
         vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self._tree.yview)
         self._tree.configure(yscrollcommand=vsb.set)
@@ -158,11 +191,21 @@ class PcapTab(ttk.Frame):
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Log area
-        log_frame = ttk.LabelFrame(self, text="Log", padding=4)
-        log_frame.pack(fill=tk.BOTH, expand=False, padx=8, pady=(4, 8))
-        self._log_text = tk.Text(log_frame, height=8, state=tk.DISABLED, wrap=tk.WORD)
+        log_frame = ttk.Frame(self, style="Card.TFrame", padding=(12, 10))
+        log_frame.pack(fill=tk.BOTH, expand=False, pady=(12, 0))
+        ttk.Label(log_frame, text="Activity log", style="Heading.TLabel").pack(
+            anchor=tk.W, pady=(0, 8)
+        )
+        log_body = ttk.Frame(log_frame, style="Card.TFrame")
+        log_body.pack(fill=tk.BOTH, expand=True)
+        self._log_text = tk.Text(
+            log_body, height=7, state=tk.DISABLED, wrap=tk.WORD,
+            relief="flat", background=PALETTE["surface_alt"],
+            foreground=PALETTE["text"], borderwidth=0,
+            padx=10, pady=8, font=("Cascadia Mono", 9),
+        )
         log_sb = ttk.Scrollbar(
-            log_frame, orient=tk.VERTICAL, command=self._log_text.yview
+            log_body, orient=tk.VERTICAL, command=self._log_text.yview
         )
         self._log_text.configure(yscrollcommand=log_sb.set)
         self._log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -186,8 +229,8 @@ class PcapTab(ttk.Frame):
             parts.append("mergecap: NOT FOUND")
         found = self._tshark.found or self._mergecap.found
         self._tool_label.config(
-            text="  |  ".join(parts),
-            foreground="green" if found else "red",
+            text="   ·   ".join(parts),
+            style="Success.TLabel" if found else "Danger.TLabel",
         )
         if not self._tshark.found:
             self._append_log(self._tshark.error)
@@ -204,14 +247,14 @@ class PcapTab(ttk.Frame):
             self._input_dir = path
             files = scan_capture_files(path)
             self._in_label.config(
-                text=f"{path}   ({len(files)} capture files)", foreground="black"
+                text=f"{path}   ({len(files)} capture files)", style="Card.TLabel"
             )
 
     def _pick_output(self) -> None:
         path = filedialog.askdirectory(title="Select output folder")
         if path:
             self._output_dir = path
-            self._out_label.config(text=path, foreground="black")
+            self._out_label.config(text=path, style="Card.TLabel")
 
     def _on_mode_change(self) -> None:
         is_filter = self._mode_var.get() == "filter"
@@ -276,6 +319,7 @@ class PcapTab(ttk.Frame):
                 tk.END,
                 iid=str(item.index),
                 values=(item.filename, item.status.value, "", ""),
+                tags=("even" if item.index % 2 else "odd",),
             )
         self._overall_var.set(0.0)
         self._stats_label.config(text=f"Total: {len(self._items)}")
@@ -373,7 +417,12 @@ class PcapTab(ttk.Frame):
         self, iid: str, filename: str, status: str, output: str, error: str
     ) -> None:
         try:
-            self._tree.item(iid, values=(filename, status, output, error))
+            stripe = "even" if int(iid) % 2 else "odd"
+            self._tree.item(
+                iid,
+                values=(filename, status, output, error),
+                tags=(stripe, _status_tag(status)),
+            )
         except tk.TclError:
             pass
 
