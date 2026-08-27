@@ -24,6 +24,7 @@ class DownloadItem:
     index: int
     url: str
     filename: str = ""
+    role_instance: str = ""
     status: DownloadStatus = DownloadStatus.QUEUED
     total_bytes: int = 0
     downloaded_bytes: int = 0

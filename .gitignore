@@ -26,3 +26,6 @@ Thumbs.db
 
 # Downloads output (user-generated)
 downloads/
+
+# Auto-downloaded third-party tools (fetched on demand at runtime)
+tools/

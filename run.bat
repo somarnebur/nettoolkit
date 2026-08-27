@@ -6,14 +6,14 @@ pushd "%~dp0" >nul
 set "VENV_PY=.venv\Scripts\python.exe"
 set "VENV_PYW=.venv\Scripts\pythonw.exe"
 
+echo Loading pre-requisites...
+
 if not exist "%VENV_PY%" (
-	echo Creating Python virtual environment...
-	python -m venv .venv
+	python -m venv .venv >nul 2>nul
 	if errorlevel 1 goto :error
 )
 
-echo Installing/updating dependencies...
-"%VENV_PY%" -m pip install -r requirements.txt
+"%VENV_PY%" -m pip install -q --disable-pip-version-check -r requirements.txt >nul 2>nul
 if errorlevel 1 goto :error
 
 echo Starting NetToolkit...
